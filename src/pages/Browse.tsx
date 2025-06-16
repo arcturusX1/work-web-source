@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,12 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { Search, Star, Clock, User } from "lucide-react";
+import type { Database } from "@/integrations/supabase/types";
+
+type ServiceCategory = Database["public"]["Enums"]["service_category"];
 
 interface Service {
   id: string;
   title: string;
   description: string;
-  category: string;
+  category: ServiceCategory;
   price: number;
   delivery_time: number;
   image_url?: string;
@@ -62,7 +64,7 @@ export default function Browse() {
         .eq("is_active", true);
 
       if (selectedCategory !== "all") {
-        query = query.eq("category", selectedCategory);
+        query = query.eq("category", selectedCategory as ServiceCategory);
       }
 
       if (searchTerm) {
