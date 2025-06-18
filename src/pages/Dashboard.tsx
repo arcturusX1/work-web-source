@@ -4,8 +4,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Plus, User, Star, DollarSign, Clock } from "lucide-react";
+import { Loader2, Plus, User, Star, DollarSign, Clock, Edit, Eye, Trash2 } from "lucide-react";
 
 interface Profile {
   id: string;
@@ -16,10 +17,22 @@ interface Profile {
   location?: string;
 }
 
+interface Service {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  price: number;
+  delivery_time: number;
+  is_active: boolean;
+  created_at: string;
+}
+
 export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -43,11 +56,60 @@ export default function Dashboard() {
 
       if (error) throw error;
       setProfile(data);
+      
+      // If user is a creator or admin, fetch their services
+      if (data.user_type === 'creator' || data.email === 'admin@freelancehub.com') {
+        fetchServices(data);
+      }
     } catch (error) {
       console.error("Error fetching profile:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchServices = async (profileData: Profile) => {
+    try {
+      let query = supabase.from("services").select("*");
+      
+      // If admin, show all services, otherwise only user's services
+      if (profileData.email !== 'admin@freelancehub.com') {
+        query = query.eq("creator_id", profileData.id);
+      }
+      
+      const { data, error } = await query.order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setServices(data || []);
+    } catch (error) {
+      console.error("Error fetching services:", error);
+    }
+  };
+
+  const toggleServiceStatus = async (serviceId: string, currentStatus: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("services")
+        .update({ is_active: !currentStatus })
+        .eq("id", serviceId);
+
+      if (error) throw error;
+
+      // Update local state
+      setServices(services.map(service => 
+        service.id === serviceId 
+          ? { ...service, is_active: !currentStatus }
+          : service
+      ));
+    } catch (error) {
+      console.error("Error updating service:", error);
+    }
+  };
+
+  const formatCategory = (category: string) => {
+    return category.split('_').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
   };
 
   if (authLoading || loading) {
@@ -79,6 +141,7 @@ export default function Dashboard() {
   }
 
   const isCreator = profile.user_type === 'creator';
+  const isAdmin = profile.email === 'admin@freelancehub.com';
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -86,12 +149,14 @@ export default function Dashboard() {
         {/* Welcome Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome back, {profile.full_name}!
+            Welcome back, {profile.full_name}! {isAdmin && <Badge variant="destructive">Admin</Badge>}
           </h1>
           <p className="text-gray-600">
-            {isCreator 
-              ? "Manage your services and track your earnings" 
-              : "Find services and manage your projects"
+            {isAdmin 
+              ? "Manage all platform services and users" 
+              : isCreator 
+                ? "Manage your services and track your earnings" 
+                : "Find services and manage your projects"
             }
           </p>
         </div>
@@ -101,14 +166,14 @@ export default function Dashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                {isCreator ? "Active Services" : "Active Projects"}
+                {isAdmin ? "Total Services" : isCreator ? "Active Services" : "Active Projects"}
               </CardTitle>
               <User className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">0</div>
+              <div className="text-2xl font-bold">{services.length}</div>
               <p className="text-xs text-muted-foreground">
-                {isCreator ? "Services available" : "Projects in progress"}
+                {isAdmin ? "Platform-wide" : isCreator ? "Services available" : "Projects in progress"}
               </p>
             </CardContent>
           </Card>
@@ -116,14 +181,14 @@ export default function Dashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                {isCreator ? "Total Earnings" : "Total Spent"}
+                {isCreator || isAdmin ? "Total Earnings" : "Total Spent"}
               </CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">$0</div>
               <p className="text-xs text-muted-foreground">
-                {isCreator ? "From completed projects" : "On services"}
+                {isCreator || isAdmin ? "From completed projects" : "On services"}
               </p>
             </CardContent>
           </Card>
@@ -144,39 +209,96 @@ export default function Dashboard() {
 
         {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column */}
+          {/* Left Column - Services */}
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>
-                  {isCreator ? "Your Services" : "Your Projects"}
-                </CardTitle>
-                <CardDescription>
-                  {isCreator 
-                    ? "Manage your service offerings" 
-                    : "Track your hired services"
-                  }
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>
+                      {isAdmin ? "All Platform Services" : isCreator ? "Your Services" : "Your Projects"}
+                    </CardTitle>
+                    <CardDescription>
+                      {isAdmin 
+                        ? "Manage all services on the platform" 
+                        : isCreator 
+                          ? "Manage your service offerings" 
+                          : "Track your hired services"
+                      }
+                    </CardDescription>
+                  </div>
+                  {(isCreator || isAdmin) && (
+                    <Button onClick={() => navigate("/create-service")}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Service
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8 text-gray-500">
-                  <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="mb-4">
-                    {isCreator 
-                      ? "You haven't created any services yet" 
-                      : "You haven't hired any services yet"
-                    }
-                  </p>
-                  <Button onClick={() => navigate(isCreator ? "/create-service" : "/browse")}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    {isCreator ? "Create Service" : "Browse Services"}
-                  </Button>
-                </div>
+                {services.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p className="mb-4">
+                      {isAdmin 
+                        ? "No services have been created yet" 
+                        : isCreator 
+                          ? "You haven't created any services yet" 
+                          : "You haven't hired any services yet"
+                      }
+                    </p>
+                    <Button onClick={() => navigate(isCreator || isAdmin ? "/create-service" : "/browse")}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      {isCreator || isAdmin ? "Create Service" : "Browse Services"}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {services.map((service) => (
+                      <div key={service.id} className="border rounded-lg p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <h3 className="font-semibold text-lg">{service.title}</h3>
+                          <div className="flex gap-2">
+                            <Badge variant={service.is_active ? "default" : "secondary"}>
+                              {service.is_active ? "Active" : "Inactive"}
+                            </Badge>
+                            <Badge variant="outline">
+                              {formatCategory(service.category)}
+                            </Badge>
+                          </div>
+                        </div>
+                        <p className="text-gray-600 text-sm mb-3 line-clamp-2">
+                          {service.description}
+                        </p>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4 text-sm text-gray-500">
+                            <span className="font-semibold text-gray-900">${service.price}</span>
+                            <span>{service.delivery_time} days</span>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              onClick={() => toggleServiceStatus(service.id, service.is_active)}
+                            >
+                              {service.is_active ? <Eye className="h-4 w-4" /> : <Eye className="h-4 w-4 opacity-50" />}
+                            </Button>
+                            {isAdmin && (
+                              <Button size="sm" variant="outline">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Right Column */}
+          {/* Right Column - Profile & Actions */}
           <div className="space-y-6">
             <Card>
               <CardHeader>
@@ -196,7 +318,10 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-600">Account Type</p>
-                  <p className="text-gray-900 capitalize">{profile.user_type}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-gray-900 capitalize">{profile.user_type}</p>
+                    {isAdmin && <Badge variant="destructive">Admin</Badge>}
+                  </div>
                 </div>
                 <Button variant="outline" className="w-full">
                   Edit Profile
@@ -209,14 +334,14 @@ export default function Dashboard() {
                 <CardTitle>Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {isCreator ? (
+                {isCreator || isAdmin ? (
                   <>
                     <Button className="w-full" onClick={() => navigate("/create-service")}>
                       <Plus className="h-4 w-4 mr-2" />
                       Create New Service
                     </Button>
-                    <Button variant="outline" className="w-full">
-                      View Analytics
+                    <Button variant="outline" className="w-full" onClick={() => navigate("/browse")}>
+                      Browse All Services
                     </Button>
                   </>
                 ) : (

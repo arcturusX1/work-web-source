@@ -56,7 +56,9 @@ export function useAuth() {
 
     toast({
       title: "Success!",
-      description: "Please check your email to confirm your account."
+      description: email === 'admin@freelancehub.com' 
+        ? "Admin account created successfully!" 
+        : "Please check your email to confirm your account."
     });
 
     return { error: null };
@@ -75,6 +77,14 @@ export function useAuth() {
         variant: "destructive"
       });
       return { error };
+    }
+
+    // Special handling for admin login
+    if (email === 'admin@freelancehub.com') {
+      toast({
+        title: "Admin login successful",
+        description: "Welcome to the admin dashboard!"
+      });
     }
 
     return { error: null };
