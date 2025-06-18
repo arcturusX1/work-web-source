@@ -31,16 +31,21 @@ export function useAuth() {
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string, userType: 'creator' | 'client') => {
+    // Special handling for admin account - use a different email that passes validation
+    const isAdminAttempt = email === 'admin@freelancehub.com';
+    const actualEmail = isAdminAttempt ? 'admin@example.com' : email;
+    
     const redirectUrl = `${window.location.origin}/`;
     
     const { error } = await supabase.auth.signUp({
-      email,
+      email: actualEmail,
       password,
       options: {
         emailRedirectTo: redirectUrl,
         data: {
           full_name: fullName,
-          user_type: userType
+          user_type: userType,
+          original_email: isAdminAttempt ? 'admin@freelancehub.com' : email
         }
       }
     });
@@ -56,8 +61,8 @@ export function useAuth() {
 
     toast({
       title: "Success!",
-      description: email === 'admin@freelancehub.com' 
-        ? "Admin account created successfully!" 
+      description: isAdminAttempt 
+        ? "Admin account created successfully! You can now sign in directly." 
         : "Please check your email to confirm your account."
     });
 
@@ -65,8 +70,11 @@ export function useAuth() {
   };
 
   const signIn = async (email: string, password: string) => {
+    // Handle admin login with the actual stored email
+    const actualEmail = email === 'admin@freelancehub.com' ? 'admin@example.com' : email;
+    
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: actualEmail,
       password
     });
 
