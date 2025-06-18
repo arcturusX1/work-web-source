@@ -113,7 +113,7 @@ BEGIN
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
-    COALESCE((NEW.raw_user_meta_data->>'user_type')::user_type, 'client')
+    COALESCE(NEW.raw_user_meta_data->>'user_type', 'client')::user_type
   );
   RETURN NEW;
 END;
